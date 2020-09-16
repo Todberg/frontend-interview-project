@@ -1,75 +1,75 @@
 import React, { FC, useEffect, useState } from 'react';
 import classnames from 'classnames';
 import styles from './image.module.scss';
+import useInViewport from 'effects/viewport';
 
 interface Props {
-  src: Src;
-  className?: string;
-  alt?: string;
+	/** The image `src` attr. */
+  src: string | Promise<string>;
+	/** The image `alt` attr. */
+	alt?: string;
+	/** The image width. */
+	width?: number;
+	/** The image height. */
+	height?: number;
+	/** Whether or not the image should be lazy loaded. */
+	lazy?: boolean;
+	/** The class name. */
+	className?: string;
 }
 
 interface State {
-  src: string | undefined;
-  isLoadingError: boolean;
-  isLoadingComplete: boolean;
+	/** The image source. */
+	src: string | undefined;
+	/** Whether or not loading has errored. */
+	error: boolean;
+	/** Whether or not loading has completed. */
+  complete: boolean;
 }
 
-const initialState: State = {
-  src: undefined,
-  isLoadingError: false,
-  isLoadingComplete: false,
-};
+/** Represents an image component. */
+const Image: FC<Props> = ({ src, alt, lazy, className, width, height, ...otherProps }) => {
+	const [state, setState] = useState<State>({ src: undefined, error: false, complete: false });
 
-const Image: FC<Props> = (props) => {
-  const { className, src, alt, ...otherProps } = props;
-  const [state, setState] = useState<State>(initialState);
-
-  const handleSource = async (source: Src): Promise<void> => {
-    if (typeof source === 'string') {
-      setState((s) => ({ ...s, src: source }));
-      return;
-    }
-
-    try {
-      const result = await source();
-      setState((s) => ({ ...s, src: result }));
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn('[Image] handleSource', e);
-      setState((s) => ({ ...s, isLoadingError: true }));
-    }
+  const onLoad = (): void => {
+    setState(state => ({ ...state, complete: true, error: false }));
   };
 
-  const handleLoad = (): void => {
-    setState((s) => ({ ...s, isLoadingComplete: true, isLoadingError: false }));
-  };
-
-  const handleError = (): void => {
-    setState((s) => ({ ...s, isLoadingComplete: false, isLoadingError: true }));
+  const onError = (): void => {
+    setState(state => ({ ...state, complete: false, error: true }));
   };
 
   useEffect(() => {
-    handleSource(src);
-  }, [src]);
+		const srcPromise = (typeof src === 'string' ? Promise.resolve(src) : src); 
 
-  const rootClass = classnames(
-    {
+		srcPromise
+			.then(src => setState(state => ({ ...state, src })))
+			.catch(() => setState(state => ({ ...state, error: true })))
+			.catch(error => console.warn(`Error reading src in '${Image.name}' component`, error))
+	}, [src]);
+	
+	const { ref, inViewport } = useInViewport();
+  const rootClass = classnames({
       [styles.image]: true,
-      [styles.error]: state.isLoadingError,
-      [styles.complete]: state.isLoadingComplete,
-    },
-    className,
-  );
+      [styles.error]: state.error,
+      [styles.complete]: state.complete,
+		}, className
+	);
 
   return (
-    <img
-      {...otherProps}
-      className={rootClass}
-      onError={handleError}
-      onLoad={handleLoad}
-      src={state.src}
-      alt={alt}
-    />
+		<div ref={ref}
+			className={rootClass}
+			style={{ width: width, height: height }}>
+		{ !lazy || (lazy && inViewport)
+			? <img
+					{...otherProps}
+					onError={onError}
+					onLoad={onLoad}
+					src={state.src}
+					alt={alt}/>
+			: null
+		}	
+		</div>
   );
 };
 

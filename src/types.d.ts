@@ -1,5 +1,3 @@
-type Src = string | (<T = string>() => Promise<T>);
-
 type Optional<T> = T | null | undefined;
 
 type User = {
